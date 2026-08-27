@@ -11,17 +11,30 @@ export const getSettings = (): SettingOptions => {
     ? `${app.getPath('documents')}/ChromePowerCache`
     : join(app.getPath('appData'), 'ChromePowerCache');
   let settings = {
+    uiLanguage: 'zh' as const,
+    uiTheme: 'light' as const,
+    strictProxyMode: true,
     profileCachePath: defaultCachePath,
     useLocalChrome: true,
     localChromePath: '',
     chromiumBinPath: '',
     automationConnect: false,
+    licenseServerUrl: 'http://39.103.68.127:3000',
+    licenseEnforced: false,
   };
 
   try {
     if (existsSync(configFilePath)) {
       const fileContent = readFileSync(configFilePath, 'utf8');
       settings = JSON.parse(fileContent);
+      settings = {
+        ...settings,
+        uiLanguage: settings.uiLanguage || 'zh',
+        uiTheme: settings.uiTheme || 'light',
+        strictProxyMode: settings.strictProxyMode !== false,
+        licenseServerUrl: 'http://39.103.68.127:3000',
+        licenseEnforced: settings.licenseEnforced === true,
+      };
     } else {
       if (!existsSync(defaultCachePath)) {
         mkdirSync(defaultCachePath, {recursive: true, mode: 0o755});

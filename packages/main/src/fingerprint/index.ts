@@ -4,6 +4,7 @@ import { WindowDB } from '../db/window';
 // import {getChromePath} from './device';
 import { BrowserWindow } from 'electron';
 import puppeteer from 'puppeteer';
+import type {Browser} from 'puppeteer';
 import { execFile, execSync, spawn } from 'child_process';
 import * as portscanner from 'portscanner';
 import { sleep } from '../utils/sleep';
@@ -35,6 +36,7 @@ const HOST = '127.0.0.1';
 // A close request can race with the ChildProcess `close` event.  This guard
 // keeps the cleanup idempotent and prevents duplicate taskkill/CDP requests.
 const closingWindowIds = new Set<number>();
+const connectedBrowsers = new Map<number, Browser>();
 
 const isProcessAlive = (pid?: number | null) => {
   if (!pid || pid <= 0) return false;
@@ -221,6 +223,7 @@ export async function openFingerprintWindow(id: number, headless = false) {
             browserWSEndpoint: data.webSocketDebuggerUrl,
             defaultViewport: null,
           });
+          connectedBrowsers.set(id, browser);
           const pages = await browser.pages();
           if (pages.length > 0) {
             await pages[0].bringToFront();
@@ -508,6 +511,7 @@ export async function openFingerprintWindow(id: number, headless = false) {
         // while ensuring every new environment receives the same identity.
         try {
           const browser = await puppeteer.connect({browserWSEndpoint: data.webSocketDebuggerUrl, defaultViewport: null});
+          connectedBrowsers.set(windowData.id!, browser);
           const pages = await browser.pages();
           for (const page of pages) await applyFingerprintToPage(page, browser, fingerprintConfig, ipInfo);
           const report = pages[0] ? await collectFingerprintHealthReport(pages[0], fingerprintConfig, ipInfo) : null;
@@ -515,7 +519,8 @@ export async function openFingerprintWindow(id: number, headless = false) {
           browser.on('targetcreated', async target => {
             try { const page = await target.page(); if (page) await applyFingerprintToPage(page, browser, fingerprintConfig, ipInfo); } catch (error) { logger.warn(`Fingerprint injection failed for new target: ${(error as Error).message}`); }
           });
-          browser.disconnect();
+          // Keep the Puppeteer connection alive so targetcreated can apply the
+          // same fingerprint to popups and newly opened tabs.
         } catch (error) {
           logger.warn(`Advanced fingerprint setup skipped for window ${id}: ${(error as Error).message}`);
         }
@@ -693,6 +698,8 @@ export async function closeFingerprintWindow(id: number, force = false) {
     }
 
     await terminateProcessTree(pid);
+    const connected = connectedBrowsers.get(id);
+    if (connected) { try { await connected.disconnect(); } catch {} connectedBrowsers.delete(id); }
 
     // Mihomo binding is released by the service's runtime cleanup on the next
     // health pass; never use ipcMain.emit() here because it does not invoke a

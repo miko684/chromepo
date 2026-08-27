@@ -60,7 +60,7 @@ const stableNoise = (seed: number, value: number) => {
   return (x - Math.floor(x) - 0.5) * 0.00001;
 };
 
-export const buildFingerprintScript = (config: DB.FingerprintConfig) => {
+export const buildFingerprintScript = (config: DB.FingerprintConfig, location: {lat?: number; lon?: number} = {}) => {
   const c = normalizeFingerprint(config);
   const payload = JSON.stringify({
     ...c,
@@ -91,7 +91,7 @@ export const buildFingerprintScript = (config: DB.FingerprintConfig) => {
     try { Object.defineProperty(window, 'outerWidth', {get: () => innerWidth, configurable: true}); Object.defineProperty(window, 'outerHeight', {get: () => innerHeight + 88, configurable: true}); } catch {}
     const oldMatch = window.matchMedia.bind(window); window.matchMedia = q => { if (/prefers-color-scheme/.test(q)) return {matches: c.prefersColorScheme === 'dark', media: q, onchange: null, addListener(){}, removeListener(){}, addEventListener(){}, removeEventListener(){}, dispatchEvent(){return false}}; return oldMatch(q); };
     if (c.locationMode === 'ip' && ${JSON.stringify(true)}) {
-      const lat = ${JSON.stringify(0)}, lon = ${JSON.stringify(0)};
+      const lat = ${JSON.stringify(location.lat || 0)}, lon = ${JSON.stringify(location.lon || 0)};
       if (lat || lon) navigator.geolocation.getCurrentPosition = (ok) => ok({coords:{latitude:lat, longitude:lon, accuracy:100}, timestamp:Date.now()});
     }
     if (c.webRTCMode === 'disabled') { try { window.RTCPeerConnection = undefined; window.webkitRTCPeerConnection = undefined; } catch {} }
@@ -121,7 +121,7 @@ export async function applyFingerprintToPage(page: Page, browser: Browser, confi
       fullVersion: (ua.match(/Chrome[^0-9]*([0-9.]+)/) || [0, '126.0.0.0'])[1], mobile: false, platform: 'Windows', platformVersion: normalized.platformVersion || '10.0.0', architecture: normalized.architecture || 'x86', bitness: normalized.bitness || '64', model: '',
     },
   });
-  const script = buildFingerprintScript(normalized);
+  const script = buildFingerprintScript(normalized, {lat: ipInfo.ll?.[0], lon: ipInfo.ll?.[1]});
   await page.evaluateOnNewDocument(script);
   await page.evaluate(script).catch(() => undefined);
   const timezone = normalized.timezoneMode === 'custom' ? normalized.customTimezone : ipInfo.timeZone;
