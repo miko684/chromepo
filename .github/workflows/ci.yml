@@ -1,0 +1,49 @@
+# This workflow is the entry point for all CI processes.
+# It is from here that all other workflows are launched.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+    branches:
+      - main
+      - 'renovate/**'
+    paths-ignore:
+      - '.github/**'
+      - '!.github/workflows/ci.yml'
+      - '!.github/workflows/release.yml'
+      - '**.md'
+      - .editorconfig
+      - .gitignore
+      - '.idea/**'
+      - '.vscode/**'
+  pull_request:
+    paths-ignore:
+      - '.github/**'
+      - '!.github/workflows/ci.yml'
+      - '!.github/workflows/release.yml'
+      - '**.md'
+      - .editorconfig
+      - .gitignore
+      - '.idea/**'
+      - '.vscode/**'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  draft_release:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release.yml
+    with:
+      dry-run: ${{ github.event_name != 'push' || (github.ref_type != 'tag' && github.ref_name != 'main') }}
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+      VITE_APP_API: ${{ secrets.VITE_APP_API }}
+      VITE_START_PAGE_URL: ${{ secrets.VITE_START_PAGE_URL }}
