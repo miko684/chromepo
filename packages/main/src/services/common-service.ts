@@ -2,12 +2,13 @@ import {app, BrowserWindow, ipcMain, dialog, shell} from 'electron';
 import {createLogger} from '../../../shared/utils/logger';
 import {CONFIG_FILE_PATH, LOGS_PATH, SERVICE_LOGGER_LABEL} from '../constants';
 import {join} from 'path';
-import {copyFileSync, writeFileSync, readFileSync, readdir, existsSync, mkdirSync} from 'fs';
+import {copyFileSync, writeFileSync, readFileSync} from 'fs';
 import type {SettingOptions} from '../../../shared/types/common';
 import {getSettings} from '../utils/get-settings';
 import {getOrigin} from '../server';
 import axios from 'axios';
-import {writeFile} from 'fs/promises';
+import {mkdir, readdir, writeFile} from 'fs/promises';
+import type {LogModule} from '../../../shared/types/common';
 
 
 const logger = createLogger(SERVICE_LOGGER_LABEL);
@@ -54,48 +55,52 @@ export const initCommonService = () => {
 
   ipcMain.handle(
     'common-fetch-logs',
-    async (_, module: 'Main' | 'Windows' | 'Proxy' | 'Services' | 'Api' = 'Main') => {
-      // if (import.meta.env.DEV) {
-      //   return [];
-      // }
-      const logDir = join(LOGS_PATH, module);
-      if (!existsSync(logDir)) {
-        mkdirSync(logDir, {recursive: true});
-      }
-      // read directory and get all folders
-      const logFiles = await new Promise<string[]>((resolve, reject) => {
-        readdir(logDir, (err, files) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(files);
-          }
+    async (_, module: LogModule = 'Main') => {
+      const normalizedModule = (() => {
+        switch (module) {
+          case 'Windows':
+            return 'Window';
+          case 'Services':
+            return 'Service';
+          case 'Main':
+          case 'Window':
+          case 'Proxy':
+          case 'Service':
+          case 'Api':
+            return module;
+          default:
+            return 'Main';
+        }
+      })();
+      const logDir = join(LOGS_PATH, normalizedModule);
+
+      try {
+        await mkdir(logDir, {recursive: true});
+        const entries = await readdir(logDir, {withFileTypes: true});
+        const logFiles = entries
+          .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.log'))
+          .sort((left, right) => left.name.localeCompare(right.name))
+          .slice(-10);
+
+        return logFiles.map(entry => {
+          const logFile = join(logDir, entry.name);
+          const content = readFileSync(logFile, 'utf8');
+          const formatContent = content
+            .split('\n')
+            .map(line => {
+              const match = line.match(/-\s*(info|warn|error):/i);
+              return {
+                message: line,
+                level: match?.[1]?.toLowerCase() || 'info',
+              };
+            })
+            .filter(line => line.message);
+          return {name: entry.name, content: formatContent};
         });
-      });
-      // read latest 10 files content
-      return logFiles.slice(-10).map(file => {
-        const logFile = join(logDir, file);
-        const content = readFileSync(logFile, 'utf8');
-        const formatContent = content
-          .split('\n')
-          .map(line => {
-            const regex = /-\s*(info|warn|error):/;
-            let logLevel = 'info';
-            const match = line.match(regex);
-            if (match) {
-              logLevel = match[1];
-            }
-            return {
-              message: line,
-              level: logLevel,
-            };
-          })
-          .filter(line => line.message);
-        return {
-          name: file,
-          content: formatContent,
-        };
-      });
+      } catch (error) {
+        logger.error('Error reading logs:', error);
+        return [];
+      }
     },
   );
 

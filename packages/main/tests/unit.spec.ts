@@ -1,5 +1,6 @@
 import type {MockedClass, MockedObject} from 'vitest';
 import {beforeEach, expect, test, vi} from 'vitest';
+import {tmpdir} from 'node:os';
 import {restoreOrCreateWindow} from '../src/mainWindow';
 
 import {BrowserWindow} from 'electron';
@@ -21,11 +22,26 @@ vi.mock('electron', () => {
   bw.prototype.isMinimized = vi.fn();
   bw.prototype.focus = vi.fn();
   bw.prototype.restore = vi.fn();
+  bw.prototype.show = vi.fn();
+  bw.prototype.setIcon = vi.fn();
+  bw.prototype.setThumbarButtons = vi.fn();
+  bw.prototype.webContents = {
+    on: vi.fn(),
+    getURL: vi.fn(() => ''),
+  } as unknown as Electron.WebContents;
 
-  const app: Pick<Electron.App, 'getAppPath'> = {
+  const nativeImage = {
+    createFromPath: vi.fn(() => ({})),
+  };
+
+  const app: Pick<Electron.App, 'getAppPath' | 'getPath' | 'setAppUserModelId'> = {
     getAppPath(): string {
       return '';
     },
+    getPath(): string {
+      return tmpdir();
+    },
+    setAppUserModelId: vi.fn(),
   };
 
   // 模拟 ipcMain
@@ -34,7 +50,7 @@ vi.mock('electron', () => {
     // 根据需要模拟其他 ipcMain 方法
   };
 
-  return {BrowserWindow: bw, app, ipcMain};
+  return {BrowserWindow: bw, nativeImage, app, ipcMain};
 });
 
 beforeEach(() => {
@@ -52,7 +68,7 @@ test('Should create a new window', async () => {
   const loadFileCalls = instance.loadFile.mock.calls.length;
   expect(loadURLCalls + loadFileCalls).toBe(1);
   if (loadURLCalls === 1) {
-    expect(instance.loadURL).toHaveBeenCalledWith(expect.stringMatching(/index\.html$/));
+    expect(instance.loadURL).toHaveBeenCalledWith(expect.stringMatching(/index\.html$|localhost:5173/));
   } else {
     expect(instance.loadFile).toHaveBeenCalledWith(expect.stringMatching(/index\.html$/));
   }

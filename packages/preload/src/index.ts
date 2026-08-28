@@ -7,6 +7,7 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
+import type {LogModule} from '../../shared/types/common';
 
 // ============================================================
 // 原有的 Bridges（用 contextBridge 暴露）
@@ -186,7 +187,7 @@ const CommonBridge = {
   async saveSettings(settings: any) {
     return await ipcRenderer.invoke('common-save-settings', settings);
   },
-  async getLogs(logModule: any) {
+  async getLogs(logModule: LogModule) {
     return await ipcRenderer.invoke('common-fetch-logs', logModule);
   },
   async getApi() {

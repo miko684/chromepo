@@ -6,6 +6,7 @@ import IPRouter from './routes/ip';
 import WindowRouter from './routes/window';
 import ProfilesRouter from './routes/profiles';
 import ProxyRouter from './routes/proxy';
+import ControlRouter from './routes/control';
 
 const app: Express = express();
 let port: number = 49156; // 初始端口
@@ -17,6 +18,8 @@ app.use('/ip', IPRouter);
 app.use('/window', WindowRouter);
 app.use('/profiles', ProfilesRouter);
 app.use('/proxy', ProxyRouter);
+// Local-only control surface for Codex/custom connectors.
+app.use('/control', ControlRouter);
 
 app.get('/status', async (req, res) => {
   res.send({
@@ -40,7 +43,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const server: Server = app
-  .listen(port, () => {
+  .listen(port, '127.0.0.1', () => {
     console.log(`Server running on http://localhost:${port}`);
     module.exports.port = port;
   })
@@ -49,12 +52,12 @@ const server: Server = app
       console.log(`Port ${port} is already in use, trying another port...`);
       port++;
       server.close();
-      server.listen(port);
+      server.listen(port, '127.0.0.1');
     } else if (error.code === 'EACCES') {
       console.error(`Port ${port} requires elevated privileges`);
       port++;
       server.close();
-      server.listen(port);
+      server.listen(port, '127.0.0.1');
     } else {
       console.error(error);
     }

@@ -1,5 +1,6 @@
 import {Card, Tabs} from 'antd';
 import {CommonBridge} from '#preload';
+import type {LogModule} from '../../../../shared/types/common';
 import {useEffect} from 'react';
 import React from 'react';
 import './index.css';
@@ -36,10 +37,18 @@ const Logs = () => {
     // },
   ];
   const [logsData, setLogsData] = React.useState<logsDataOptions[]>([]);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
 
-  const fetchLogs = async (logModule: 'Main' | 'Windows' | 'Proxy' | 'Api') => {
-    const logs = await CommonBridge.getLogs(logModule);
-    setLogsData(logs.reverse());
+  const fetchLogs = async (logModule: LogModule) => {
+    try {
+      setLoadError(null);
+      const logs = await CommonBridge.getLogs(logModule);
+      setLogsData(Array.isArray(logs) ? [...logs].reverse() : []);
+    } catch (error) {
+      console.error('Failed to load logs:', error);
+      setLogsData([]);
+      setLoadError('日志读取失败，请稍后重试。');
+    }
   };
 
   useEffect(() => {
@@ -54,7 +63,7 @@ const Logs = () => {
         bordered={false}
       >
         <Tabs
-          onChange={(key: string) => fetchLogs(key as 'Main' | 'Windows' | 'Proxy' | 'Api')}
+          onChange={(key: string) => fetchLogs(key as LogModule)}
           size="small"
           items={items}
         />
@@ -67,8 +76,9 @@ const Logs = () => {
             </div>
           </div>
           <div className="mt-4">
+            {loadError && <p className="text-red-300">{loadError}</p>}
             {logsData.map((logs, logsIndex) => {
-              const reversedLogs = [...logs.content].reverse();
+              const reversedLogs = Array.isArray(logs.content) ? [...logs.content].reverse() : [];
               return reversedLogs.map((log, index) => {
                 if (log.level === 'error') {
                   return (

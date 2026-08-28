@@ -23,3 +23,12 @@ export interface BridgeMessage {
   type: NoticeType;
   text: string;
 }
+
+export type LogModule =
+  | 'Main'
+  | 'Window'
+  | 'Windows'
+  | 'Proxy'
+  | 'Service'
+  | 'Services'
+  | 'Api';

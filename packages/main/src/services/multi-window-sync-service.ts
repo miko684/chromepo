@@ -5,6 +5,7 @@ import {createLogger} from '../../../shared/utils/logger';
 import {SERVICE_LOGGER_LABEL} from '../constants';
 import {WindowDB} from '../db/window';
 import puppeteer, {type Browser} from 'puppeteer';
+import axios from 'axios';
 
 const logger = createLogger(SERVICE_LOGGER_LABEL);
 
@@ -1132,30 +1133,32 @@ class MultiWindowSyncService {
       if (!this.masterWindowPid) return;
 
       const masterWindow = await WindowDB.getByPid(this.masterWindowPid);
-      if (masterWindow && masterWindow.debug_port) {
+      if (masterWindow && masterWindow.port) {
         try {
+          const {data} = await axios.get(`http://127.0.0.1:${masterWindow.port}/json/version`, {timeout: 1000});
           const browser = await puppeteer.connect({
-            browserWSEndpoint: `ws://127.0.0.1:${masterWindow.debug_port}/devtools/browser`,
+            browserWSEndpoint: data.webSocketDebuggerUrl,
             defaultViewport: null,
           });
           this.cdpBrowsers.set(this.masterWindowPid, browser);
         } catch (error) {
-          logger.error(`Failed to connect to master window CDP on port ${masterWindow.debug_port}:`, error);
+          logger.error(`Failed to connect to master window CDP on port ${masterWindow.port}:`, error);
         }
       }
 
       // Connect to slave windows
       for (const slavePid of this.slaveWindowPids) {
         const slaveWindow = await WindowDB.getByPid(slavePid);
-        if (slaveWindow && slaveWindow.debug_port) {
+        if (slaveWindow && slaveWindow.port) {
           try {
+            const {data} = await axios.get(`http://127.0.0.1:${slaveWindow.port}/json/version`, {timeout: 1000});
             const browser = await puppeteer.connect({
-              browserWSEndpoint: `ws://127.0.0.1:${slaveWindow.debug_port}/devtools/browser`,
+              browserWSEndpoint: data.webSocketDebuggerUrl,
               defaultViewport: null,
             });
             this.cdpBrowsers.set(slavePid, browser);
           } catch (error) {
-            logger.error(`Failed to connect to slave window CDP on port ${slaveWindow.debug_port}:`, error);
+            logger.error(`Failed to connect to slave window CDP on port ${slaveWindow.port}:`, error);
           }
         }
       }

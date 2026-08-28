@@ -1,6 +1,6 @@
 import type {IpcRendererEvent} from 'electron';
 import {ipcRenderer} from 'electron';
-import type {BridgeMessage, SettingOptions} from '../../../shared/types/common';
+import type {BridgeMessage, LogModule, SettingOptions} from '../../../shared/types/common';
 
 export const CommonBridge = {
   async download(path: string) {
@@ -31,7 +31,7 @@ export const CommonBridge = {
     const result = await ipcRenderer.invoke('common-save-settings', settings);
     return result;
   },
-  async getLogs(logModule: 'Main' | 'Windows' | 'Proxy' | 'Services' | 'Api') {
+  async getLogs(logModule: LogModule) {
     const result = await ipcRenderer.invoke('common-fetch-logs', logModule);
     return result;
   },
