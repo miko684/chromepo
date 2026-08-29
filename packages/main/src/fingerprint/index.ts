@@ -515,7 +515,13 @@ export async function openFingerprintWindow(id: number, headless = false) {
           const pages = await browser.pages();
           for (const page of pages) await applyFingerprintToPage(page, browser, fingerprintConfig, ipInfo);
           const report = pages[0] ? await collectFingerprintHealthReport(pages[0], fingerprintConfig, ipInfo) : null;
-          if (report) await WindowDB.update(windowData.id, {...windowData, fingerprint: JSON.stringify(fingerprintConfig), fingerprint_report: JSON.stringify(report)});
+          if (report) {
+            await WindowDB.updateFingerprint(
+              windowData.id,
+              JSON.stringify(fingerprintConfig),
+              JSON.stringify(report),
+            );
+          }
           browser.on('targetcreated', async target => {
             try { const page = await target.page(); if (page) await applyFingerprintToPage(page, browser, fingerprintConfig, ipInfo); } catch (error) { logger.warn(`Fingerprint injection failed for new target: ${(error as Error).message}`); }
           });

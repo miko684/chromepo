@@ -185,6 +185,25 @@ const updateRuntime = async (id: number, runtime: {
   }
 };
 
+/**
+ * Update fingerprint metadata without touching live process state.
+ *
+ * Runtime fields are intentionally kept out of this update.  A window row
+ * read before Chromium starts can still contain status=closed, pid=null and
+ * port=null; spreading that stale row into a later metadata update would
+ * otherwise erase the CDP endpoint that was just persisted.
+ */
+const updateFingerprint = async (id: number, fingerprint: string, fingerprint_report?: string | null) => {
+  try {
+    await db('window')
+      .where({id})
+      .update({fingerprint, fingerprint_report: fingerprint_report ?? null, updated_at: db.fn.now()});
+    return {success: true, message: 'Window fingerprint updated successfully.'};
+  } catch (error) {
+    return {success: false, message: 'Failed to update window fingerprint.' + error};
+  }
+};
+
 const create = async (windowData: DB.Window, fingerprint?: SafeAny) => {
   if (windowData.id && typeof windowData.id === 'string') {
     windowData.profile_id = windowData.id;
@@ -302,6 +321,7 @@ export const WindowDB = {
   getOpenedWindows,
   update,
   updateRuntime,
+  updateFingerprint,
   create,
   remove,
   deleteAll,
