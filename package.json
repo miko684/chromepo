@@ -27,6 +27,7 @@
     "watch": "chcp 65001 && node scripts/watch.mjs",
     "watch:mac": "node scripts/watch.mjs",
     "control:x": "node scripts/chrome-power-x.mjs",
+    "mcp:server": "node scripts/chrome-power-mcp.mjs",
     "lint": "eslint . --ext js,mjs,cjs,ts,mts,cts,vue",
     "typecheck:main": "tsc --noEmit -p packages/main/tsconfig.json",
     "typecheck:preload": "tsc --noEmit -p packages/preload/tsconfig.json",

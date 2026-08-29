@@ -12,6 +12,7 @@ import Logs from '../pages/logs';
 import Start from '../pages/start';
 import Api from '../pages/api';
 import Extensions from '../pages/extensions';
+import ControlCenter from '../pages/control-center';
 interface RouteOption {
   path: string;
   name?: string;
@@ -66,6 +67,12 @@ export const useRoutes = () => {
         name: t('menu_sync'),
         icon: <Icon icon="ic:outline-sync" />,
         component: Sync,
+      },
+      {
+        path: '/control-center',
+        name: '浏览器控制中心',
+        icon: <Icon icon="carbon:ibm-cloud-pak-integration" />,
+        component: ControlCenter,
       },
       {
         path: '/logs',

@@ -30,6 +30,19 @@ npm run control:x -- navigate --window-id 77 --url https://x.com/home
 本身不会自动发现该命令；需要在外部 connector 中把 `accountId/windowId` 映射到
 上述命令，并把输出转换成 Agent Reach 使用的 JSON/YAML 结构。
 
+项目现在还提供了一个本地 MCP stdio server：
+
+```bash
+npm run mcp:server
+```
+
+它暴露 `chrome_power_list_instances`、`chrome_power_list_tabs`、
+`chrome_power_navigate`、`chrome_power_read_x` 和
+`chrome_power_disconnect`。Codex 的 MCP 配置应把 command 指向项目目录下的
+`npm run mcp:server`；如果 API 端口不是 49156，则设置
+`CHROME_POWER_API_URL=http://127.0.0.1:<port>`。这个连接器仍然只提供导航、读取和
+会话断开，不提供评论、点赞、发帖或自动登录。
+
 ## 与 Agent Reach 的边界
 
 Agent Reach 的 Twitter 后端使用独立 Cookie 凭据或 OpenCLI 会话，并没有

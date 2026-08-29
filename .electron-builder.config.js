@@ -32,6 +32,8 @@ module.exports = async function () {
     files: [
       'packages/**/dist/**',
       'packages/**/assets/**',
+      'scripts/chrome-power-mcp.mjs',
+      'scripts/chrome-power-x.mjs',
       'migrations',
       'package.json',
       'node_modules/sqlite3/lib/binding/**/*.node',
