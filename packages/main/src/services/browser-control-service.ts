@@ -115,6 +115,14 @@ const getXPage = async (browser: Browser, navigate = false): Promise<Page> => {
   return page;
 };
 
+const formatXNavigationError = (error: unknown) => {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (/ERR_TUNNEL_CONNECTION_FAILED|UPSTREAM\d{3}|502|503|504/i.test(detail)) {
+    return `X 页面加载失败：当前浏览器实例的代理无法建立到 X 的 HTTPS 隧道（${detail}）。请更换允许访问 X 的代理节点，程序不会自动切换直连。`;
+  }
+  return detail;
+};
+
 export const listBrowserInstances = async (): Promise<BrowserInstanceSummary[]> => {
   const windows = await WindowDB.all();
   return await Promise.all(windows.map(async windowData => {
@@ -162,7 +170,11 @@ export const navigateBrowserInstance = async (windowId: number, rawUrl: string) 
 
   return await withBrowser(windowId, async browser => {
     const page = await getXPage(browser, true);
-    await page.goto(url.toString(), {waitUntil: 'domcontentloaded', timeout: 30000});
+    try {
+      await page.goto(url.toString(), {waitUntil: 'domcontentloaded', timeout: 30000});
+    } catch (error) {
+      throw new Error(formatXNavigationError(error));
+    }
     return await getPageSummary(page);
   });
 };

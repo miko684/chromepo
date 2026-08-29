@@ -26,6 +26,7 @@ import api from '../../../shared/api/api';
 import { ExtensionDB } from '../db/extension';
 import { getPort } from '../server';
 import { applyFingerprintToPage, collectFingerprintHealthReport, normalizeFingerprint } from './advanced';
+import axios from 'axios';
 
 const mutex = new Mutex();
 
@@ -201,6 +202,43 @@ const waitForChromeReady = async (chromePort: number, id: number, maxAttempts = 
   }
 
   throw new Error('Chrome instance failed to start within the timeout period');
+};
+
+/**
+ * Check the exact route that the control center needs before launching a
+ * browser.  A proxy may be reachable for IP lookup while still rejecting X
+ * with an upstream 5xx/590 response.  Starting Chromium in that state only
+ * produces the much less useful ERR_TUNNEL_CONNECTION_FAILED page error.
+ */
+const probeXProxy = async (proxyUrl: string) => {
+  const parsed = new URL(proxyUrl);
+  const response = await axios.get('https://x.com/home', {
+    proxy: {
+      protocol: parsed.protocol.replace(':', ''),
+      host: parsed.hostname,
+      port: Number(parsed.port),
+    },
+    timeout: 10_000,
+    validateStatus: () => true,
+  });
+
+  if (response.status >= 500) {
+    throw new Error(`上游代理返回 HTTP ${response.status}`);
+  }
+};
+
+const closeLocalProxy = async (
+  proxyType: string | undefined,
+  proxyServer: Server<typeof IncomingMessage, typeof ServerResponse> | ProxyChain.Server | null,
+) => {
+  if (!proxyServer) return;
+  await new Promise<void>(resolve => {
+    if (proxyType === 'socks5') {
+      (proxyServer as Server<typeof IncomingMessage, typeof ServerResponse>).close(() => resolve());
+    } else {
+      (proxyServer as ProxyChain.Server).close(true, () => resolve());
+    }
+  });
 };
 
 export async function openFingerprintWindow(id: number, headless = false) {
@@ -393,8 +431,29 @@ export async function openFingerprintWindow(id: number, headless = false) {
       if (finalProxy) {
         launchParamter.push(`--proxy-server=${finalProxy}`);
         // 解决本地 DNS 解析问题，防止 DNS 泄露
-        launchParamter.push('--host-resolver-rules="MAP * 0.0.0.0 , EXCLUDE localhost, EXCLUDE 127.0.0.1"');
+        // spawn() already passes this as one argument; embedded quotes become
+        // part of Chromium's value and can make the rule parser unreliable.
+        launchParamter.push('--host-resolver-rules=MAP * 0.0.0.0,EXCLUDE localhost,EXCLUDE 127.0.0.1');
         logger.info(`Window ${id} proxy args: --proxy-server=${finalProxy}`);
+
+        try {
+          await probeXProxy(finalProxy);
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          const message = `实例 ${id} 的代理无法连接 X（${detail}）。请更换允许访问 X 的代理节点；为避免 IP 泄漏，未自动切换直连。`;
+          logger.error(`Window ${id} proxy preflight failed: ${message}`);
+          bridgeMessageToUI({type: 'error', text: message});
+          await closeLocalProxy(proxyType, proxyServer);
+          if (isMihomoNode && proxyData?.id) {
+            try {
+              const {ipcMain} = require('electron');
+              ipcMain.emit('mihomo-unbind-window', id);
+            } catch {
+              // Ignore cleanup errors; the user-facing error is already shown.
+            }
+          }
+          throw new Error(message);
+        }
       }
 
       if (ipInfo?.timeZone && !settings.useLocalChrome) {
@@ -607,9 +666,13 @@ export async function openFingerprintWindow(id: number, headless = false) {
 
 async function createHttpProxy(proxyData: DB.Proxy) {
   const listenPort = await portscanner.findAPortNotInUse(30000, 40000);
-  const [httpHost, httpPort, username, password] = proxyData.proxy!.split(':');
-
-  const oldProxyUrl = `http://${username}:${password}@${httpHost}:${httpPort}`;
+  const raw = proxyData.proxy!.trim();
+  const parsed = new URL(raw.includes('://') ? raw : `http://${raw}`);
+  if (!parsed.hostname || !parsed.port) throw new Error('HTTP proxy must include host and port');
+  const username = parsed.username ? encodeURIComponent(decodeURIComponent(parsed.username)) : '';
+  const password = parsed.password ? encodeURIComponent(decodeURIComponent(parsed.password)) : '';
+  const auth = username ? `${username}:${password}@` : '';
+  const oldProxyUrl = `http://${auth}${parsed.host}`;
   const newProxyUrl = await ProxyChain.anonymizeProxy({
     url: oldProxyUrl,
     port: listenPort,
