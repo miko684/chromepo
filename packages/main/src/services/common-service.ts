@@ -2,7 +2,7 @@ import {app, BrowserWindow, ipcMain, dialog, shell} from 'electron';
 import {createLogger} from '../../../shared/utils/logger';
 import {CONFIG_FILE_PATH, LOGS_PATH, SERVICE_LOGGER_LABEL} from '../constants';
 import {join} from 'path';
-import {copyFileSync, writeFileSync, readFileSync} from 'fs';
+import {copyFileSync, writeFileSync, statSync, openSync, readSync, closeSync} from 'fs';
 import type {SettingOptions} from '../../../shared/types/common';
 import {getSettings} from '../utils/get-settings';
 import {getOrigin} from '../server';
@@ -12,6 +12,34 @@ import type {LogModule} from '../../../shared/types/common';
 
 
 const logger = createLogger(SERVICE_LOGGER_LABEL);
+
+// Do not load an entire log file into memory. A corrupted or runaway log can
+// otherwise make opening the log page terminate the Electron process.
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+
+const readLogTail = (logFile: string) => {
+  const size = statSync(logFile).size;
+  const start = Math.max(0, size - MAX_LOG_BYTES);
+  const length = size - start;
+  const fd = openSync(logFile, 'r');
+
+  try {
+    const buffer = Buffer.alloc(length);
+    const bytesRead = readSync(fd, buffer, 0, length, start);
+    let content = buffer.subarray(0, bytesRead).toString('utf8');
+
+    // The first line may be cut in the middle when reading a tail. Drop it so
+    // the renderer never receives a partial log entry.
+    if (start > 0) {
+      const firstNewline = content.indexOf('\n');
+      content = firstNewline >= 0 ? content.slice(firstNewline + 1) : '';
+    }
+
+    return content;
+  } finally {
+    closeSync(fd);
+  }
+};
 
 export const initCommonService = () => {
   ipcMain.handle('common-download', async (_, filePath: string) => {
@@ -84,7 +112,7 @@ export const initCommonService = () => {
 
         return logFiles.map(entry => {
           const logFile = join(logDir, entry.name);
-          const content = readFileSync(logFile, 'utf8');
+          const content = readLogTail(logFile);
           const formatContent = content
             .split('\n')
             .map(line => {
