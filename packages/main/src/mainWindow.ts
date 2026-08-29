@@ -101,12 +101,13 @@ async function createWindow() {
     console.error('[did-fail-load]', errorCode, errorDescription);
   });
 
-  // 5. 页面加载完成后，强制以独立窗口打开 DevTools
+  // 5. DevTools only opens when explicitly requested during development.
+  // Opening it unconditionally creates a second window and interferes with
+  // production startup and automated smoke checks.
   browserWindow.webContents.on('did-finish-load', () => {
-    // 延迟 1 秒确保页面稳定
-    setTimeout(() => {
+    if (import.meta.env.DEV && process.env.CHROME_POWER_OPEN_DEVTOOLS === '1') {
       browserWindow.webContents.openDevTools({ mode: 'detach' });
-    }, 1000);
+    }
   });
 
   // ===== 添加结束 =====
