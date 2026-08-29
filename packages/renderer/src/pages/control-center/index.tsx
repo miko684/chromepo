@@ -22,7 +22,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons';
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {CommonBridge} from '#preload';
+import {CommonBridge, WindowBridge} from '#preload';
 import type {
   BrowserInstanceSummary,
   BrowserTabSummary,
@@ -106,6 +106,44 @@ const ControlCenter = () => {
       active = false;
     };
   }, []);
+
+  // Keep the control center in sync when a window is opened or closed from
+  // the main Windows page.  This page used to fetch only once on mount, so a
+  // browser that was successfully started afterwards remained labelled as
+  // "已关闭" until the user manually refreshed the whole list.
+  useEffect(() => {
+    if (!apiUrl) return;
+
+    const refresh = () => {
+      void refreshInstances(apiUrl);
+    };
+    const handleWindowOpened = (_event: Electron.IpcRendererEvent, windowId: number) => {
+      setInstances(current => current.map(instance =>
+        instance.windowId === windowId
+          ? {...instance, status: 'running', cdpReady: true}
+          : instance,
+      ));
+      window.setTimeout(refresh, 250);
+    };
+    const handleWindowClosed = (_event: Electron.IpcRendererEvent, windowId: number) => {
+      setInstances(current => current.map(instance =>
+        instance.windowId === windowId
+          ? {...instance, status: 'closed', pid: null, port: null, cdpReady: false, connected: false}
+          : instance,
+      ));
+      window.setTimeout(refresh, 250);
+    };
+
+    const removeOpenedListener = WindowBridge?.onWindowOpened(handleWindowOpened);
+    const removeClosedListener = WindowBridge?.onWindowClosed(handleWindowClosed);
+    const interval = window.setInterval(refresh, 5000);
+
+    return () => {
+      removeOpenedListener?.();
+      removeClosedListener?.();
+      window.clearInterval(interval);
+    };
+  }, [apiUrl, refreshInstances]);
 
   const selectInstance = (windowId: number) => {
     setSelectedWindowId(windowId);
