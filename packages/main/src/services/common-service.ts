@@ -15,7 +15,8 @@ const logger = createLogger(SERVICE_LOGGER_LABEL);
 
 // Do not load an entire log file into memory. A corrupted or runaway log can
 // otherwise make opening the log page terminate the Electron process.
-const MAX_LOG_BYTES = 2 * 1024 * 1024;
+const MAX_LOG_BYTES = 512 * 1024;
+const MAX_LOG_LINES = 1000;
 
 const readLogTail = (logFile: string) => {
   const size = statSync(logFile).size;
@@ -115,14 +116,15 @@ export const initCommonService = () => {
           const content = readLogTail(logFile);
           const formatContent = content
             .split('\n')
+            .filter(line => line)
+            .slice(-MAX_LOG_LINES)
             .map(line => {
               const match = line.match(/-\s*(info|warn|error):/i);
               return {
                 message: line,
                 level: match?.[1]?.toLowerCase() || 'info',
               };
-            })
-            .filter(line => line.message);
+            });
           return {name: entry.name, content: formatContent};
         });
       } catch (error) {
