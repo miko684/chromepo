@@ -56,7 +56,7 @@ const App = () => {
         rootClassName={loading ? 'fullscreen-spin-wrapper visible' : ''}
       /> */}
       {location.pathname !== '/start' && <Header></Header>}
-      <Layout>
+      <Layout className="app-body-layout">
         {location.pathname !== '/start' && (
           <Sider
             width={164}
